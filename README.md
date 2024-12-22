@@ -6,18 +6,15 @@ Manually copy-pasting code into AI is garbage. aipaste automates the grind: snap
 
 Tired of `cat`-ing files into your clipboard and pasting them into chat interfaces? aipaste generates a single, clean Markdown file with all the junk excluded, ready for AI tools like Claude or ChatGPT. Snap it, analyze it, done.
 
-## Why I Made This
-
-I was frustrated with always manually copying files into my clipboard to paste into AI chat interfaces. Claude allows Markdown uploads, so I built aipaste to automate the process: create a single file with all the unnecessary junk excluded, clean and ready for upload. Simple, fast, and slick.
-
 ## Features
 
-- **No BS**: Run `aipaste snap` to do the work for you.
-- **Clean & Ready**: Automatically formats your project into Markdown.
-- **Smart Automation**: Skips the junk (`.gitignore`) and detects 25+ languages.
-- **Token Intel**: Instant token usage reports across models like GPT-4, Claude, and more.
-- **No Junk**: Filters out binaries, large files, and irrelevant clutter.
-- **Fast & Reliable**: Built in Python to keep things quick and clean.
+- **No BS**: Run `aipaste snap` or `aipaste stream` to do the work for you
+- **Clean & Ready**: Automatically formats your project into Markdown
+- **Smart Automation**: Skips the junk (`.gitignore`) and detects 25+ languages
+- **Token Intel**: Instant token usage reports across models like GPT-4, Claude, and more
+- **No Junk**: Filters out binaries, large files, and irrelevant clutter
+- **Fast & Reliable**: Built in Python to keep things quick and clean
+- **Clipboard Ready**: Stream output directly to your clipboard
 
 ## Installation
 
@@ -33,7 +30,7 @@ I was frustrated with always manually copying files into my clipboard to paste i
 
 ```bash
 # Clone the repository
-git clone https://github.com/scharc/aipaste.git
+git clone https://github.com/yourusername/aipaste.git
 cd aipaste
 
 # Install dependencies via Poetry
@@ -49,7 +46,7 @@ sudo make install-system
 
 ### Shell Completion (Optional)
 
-Add to your shell’s config file:
+Add to your shell's config file:
 
 ```bash
 # For bash (~/.bashrc)
@@ -63,14 +60,28 @@ source <(aipaste completion zsh)
 
 ## Usage
 
-### 1) Create a Snapshot
+### 1) Create a Snapshot File
 ```bash
 cd your-project
 aipaste snap
 ```
 This generates `your-project_source.md`, containing all your code in Markdown form.
 
-### 2) Detailed Token Analysis
+### 2) Stream to Clipboard
+```bash
+# macOS
+aipaste stream | pbcopy
+
+# Linux
+aipaste stream | xclip -selection clipboard
+# or
+aipaste stream | xsel --clipboard
+
+# Windows (PowerShell)
+aipaste stream | Set-Clipboard
+```
+
+### 3) Detailed Token Analysis
 ```bash
 # If the current folder is named "myproject", it auto-detects myproject_source.md
 aipaste tokens
@@ -119,12 +130,21 @@ Options:
 - `--skip-common`: Skip common files like LICENSE
 - `--skip-files`: Additional patterns to skip
 
+### `aipaste stream`
+Stream project snapshot to stdout (perfect for piping to clipboard).
+
+Options:
+- `-p, --path`: Project directory
+- `--max-file-size`: Maximum file size (default: 1MB)
+- `--skip-common`: Skip common files like LICENSE
+- `--skip-files`: Additional patterns to skip
+
 ### `aipaste tokens [FILE]`
 If `FILE` is not given, attempts to open `{cwd_name}_source.md`.  
 Displays:
 - File stats (characters, lines, code blocks)
 - Token usage across multiple AI models (GPT-4, GPT-3.5, Claude, GPT-O1, Ollama Llama2, etc.)
-- Percentage of each model’s context window used & remaining tokens
+- Percentage of each model's context window used & remaining tokens
 
 ### `aipaste completion [bash|zsh|fish]`
 Generates a shell completion script. Example usage:
@@ -143,8 +163,3 @@ make build
 make clean
 make install-user
 ```
-
-## License
-
-MIT License
-
