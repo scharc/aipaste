@@ -4,6 +4,7 @@ _aipaste() {
     local -a commands
     commands=(
         'snap:Create a markdown snapshot of your project'
+        'stream:Stream project snapshot to stdout for piping'
         'tokens:Detailed token analysis for your project'
         'completion:Generate shell completion script'
     )
@@ -17,6 +18,15 @@ _aipaste() {
                 '--no-summary[Hide stats]' \
                 '--max-file-size[Max file size]:size' \
                 '-f[Force overwrite]' \
+                '--skip-common[Skip common files]' \
+                '--skip-files[Additional skip patterns]:pattern:_files' \
+                '--help[Show help]' \
+                '*:: :->end'
+            ;;
+        stream)
+            _arguments -C \
+                '(-p --path)'{-p,--path}'[Path to project directory]:directory:_files -/' \
+                '--max-file-size[Max file size]:size' \
                 '--skip-common[Skip common files]' \
                 '--skip-files[Additional skip patterns]:pattern:_files' \
                 '--help[Show help]' \
@@ -36,4 +46,3 @@ _aipaste() {
 }
 
 _aipaste "$@"
-

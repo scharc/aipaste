@@ -33,7 +33,7 @@ I was frustrated with always manually copying files into my clipboard to paste i
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/aipaste.git
+git clone https://github.com/scharc/aipaste.git
 cd aipaste
 
 # Install dependencies via Poetry

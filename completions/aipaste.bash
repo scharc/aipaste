@@ -5,9 +5,8 @@ _aipaste_completion() {
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
     # List of top-level commands:
-    local commands="snap tokens completion"
+    local commands="snap tokens completion stream"
 
-    # The 'tokens' command can take an optional FILE argument.
     case "${COMP_WORDS[1]}" in
         snap)
             local snap_opts="--path --output --summary --no-summary --max-file-size --force --skip-common --skip-files --help"
@@ -30,9 +29,25 @@ _aipaste_completion() {
             fi
             return 0
             ;;
+        stream)
+            local stream_opts="--path --max-file-size --skip-common --skip-files --help"
+            case "${prev}" in
+                --path|-p)
+                    COMPREPLY=( $(compgen -d -- "${cur}") )
+                    return 0
+                    ;;
+                --skip-files)
+                    COMPREPLY=( $(compgen -f -- "${cur}") )
+                    return 0
+                    ;;
+            esac
+            if [[ "${cur}" == -* ]]; then
+                COMPREPLY=( $(compgen -W "${stream_opts}" -- "${cur}") )
+            fi
+            return 0
+            ;;
         tokens)
             # Optional file arg
-            # We'll just provide filename completion:
             COMPREPLY=( $(compgen -f -- "${cur}") )
             return 0
             ;;
@@ -50,4 +65,3 @@ _aipaste_completion() {
 }
 
 complete -F _aipaste_completion aipaste
-

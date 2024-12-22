@@ -2,12 +2,13 @@
 import sys
 from pathlib import Path
 import click
-from typing import List, Dict
+from typing import List, Dict, Iterator
 import fnmatch
 import chardet
 from rich import print as rprint
 from rich.panel import Panel
 from rich.syntax import Syntax
+from rich.console import Console
 import tiktoken
 
 
@@ -306,7 +307,6 @@ class Aipaste:
                 ...
             }
         """
-        import tiktoken
 
         enc = tiktoken.get_encoding("cl100k_base")
         baseline_count = len(enc.encode(text))
@@ -449,6 +449,69 @@ class Aipaste:
             rprint(f"  • Languages: {', '.join(sorted(self.stats['languages']))}")
 
         return result
+    
+    def stream_output(
+            self,
+            max_file_size: int = 1_000_000,
+        ) -> Iterator[str]:
+            """Stream the concatenated output of all project files.
+            
+            Args:
+                max_file_size: Maximum size of individual files to include
+                
+            Yields:
+                Chunks of the markdown output as they're generated
+            """
+            self.initialize()
+            
+            # Disable rich formatting when streaming
+            console = Console(file=sys.stdout, force_terminal=False)
+            
+            # Header
+            yield "# Project Source Code\n\n"
+            
+            # Project structure
+            yield "## Project Structure\n"
+            yield self.generate_tree()
+            yield "\n"
+            
+            # Process files
+            files = []
+            for file_path in self.project_path.rglob("*"):
+                if file_path.is_file():
+                    self.stats["total_files"] += 1
+                    if not self.should_ignore(file_path):
+                        files.append(file_path)
+                    else:
+                        self.stats["ignored_files"] += 1
+            
+            files.sort()
+            
+            # Stream each file
+            for file_path in files:
+                rel_path = file_path.relative_to(self.project_path)
+                yield f"\n## {rel_path}\n"
+                
+                if self.is_text_file(file_path, max_file_size):
+                    try:
+                        with open(file_path, "r", encoding="utf-8") as f:
+                            content = f.read()
+                        
+                        lang = self.get_language(file_path)
+                        self.stats["included_files"] += 1
+                        self.stats["total_size"] += len(content)
+                        if lang:
+                            self.stats["languages"].add(lang)
+                        
+                        yield f"```{lang}\n"
+                        yield content
+                        yield "```\n"
+                    except Exception as e:
+                        console.print(f"[yellow]Warning:[/] Skipping {rel_path}: {str(e)}")
+                        yield "*[Error reading file]*\n"
+                else:
+                    self.stats["binary_files"] += 1
+                    yield "*[Binary file]*\n"
 
 
 @click.group()
@@ -456,6 +519,49 @@ def cli():
     """AIpaste - Format your code for AI tools like ChatGPT and Claude."""
     pass
 
+@cli.command()
+@click.option(
+    "-p",
+    "--path",
+    "project_path",
+    default=".",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True, path_type=Path),
+    help="Path to the project directory",
+)
+@click.option(
+    "--max-file-size",
+    default=1_000_000,
+    type=int,
+    help="Maximum file size in bytes",
+)
+@click.option(
+    "--skip-common",
+    is_flag=True,
+    help="Skip commonly referenced files (LICENSE, CONTRIBUTING, etc.)",
+)
+@click.option(
+    "--skip-files",
+    multiple=True,
+    help="Additional files or patterns to skip",
+)
+def stream(project_path, max_file_size, skip_common, skip_files):
+    """Stream project snapshot to stdout for piping."""
+    try:
+        paster = Aipaste(
+            project_path=project_path,
+            output_file=None,  # We don't need an output file for streaming
+            skip_common=skip_common,
+            skip_files=skip_files,
+        )
+        
+        for chunk in paster.stream_output(max_file_size=max_file_size):
+            sys.stdout.write(chunk)
+            sys.stdout.flush()  # Ensure immediate output
+            
+    except Exception as e:
+        console = Console(stderr=True)
+        console.print(f"[red]Error:[/] {str(e)}")
+        raise click.Abort()
 
 @cli.command()
 @click.option(
@@ -535,7 +641,7 @@ def snap(
 def tokens(file):
     """
     Print a detailed token analysis of a project snapshot or user-specified file.
-    
+
     This refactors 'estimate' and 'analyze' into one command that:
       - Auto-detects the snapshot if none is provided
       - Prints file stats
@@ -585,7 +691,9 @@ def tokens(file):
             usage = info["usage_percent"]
             remaining = info["remaining_tokens"]
             rprint(f"  • {model}: [green]{tokens:,}[/] tokens")
-            rprint(f"     ↳ Max Context: {max_ctx:,}  |  Usage: {usage:.1f}%  |  Remaining: {remaining:,}")
+            rprint(
+                f"     ↳ Max Context: {max_ctx:,}  |  Usage: {usage:.1f}%  |  Remaining: {remaining:,}"
+            )
 
         rprint(
             "\n[dim]Note: All values are approximate and may vary by actual model version or usage.[/]\n"
