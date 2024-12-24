@@ -10,7 +10,7 @@ from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.console import Console
 import tiktoken
-
+import pyperclip
 
 class Aipaste:
     """Main class for creating AI-friendly snapshots of code projects."""
@@ -449,75 +449,104 @@ class Aipaste:
             rprint(f"  • Languages: {', '.join(sorted(self.stats['languages']))}")
 
         return result
-    
+
     def stream_output(
-            self,
-            max_file_size: int = 1_000_000,
-        ) -> Iterator[str]:
-            """Stream the concatenated output of all project files.
-            
-            Args:
-                max_file_size: Maximum size of individual files to include
-                
-            Yields:
-                Chunks of the markdown output as they're generated
-            """
-            self.initialize()
-            
-            # Disable rich formatting when streaming
-            console = Console(file=sys.stdout, force_terminal=False)
-            
-            # Header
-            yield "# Project Source Code\n\n"
-            
-            # Project structure
-            yield "## Project Structure\n"
-            yield self.generate_tree()
-            yield "\n"
-            
-            # Process files
-            files = []
-            for file_path in self.project_path.rglob("*"):
-                if file_path.is_file():
-                    self.stats["total_files"] += 1
-                    if not self.should_ignore(file_path):
-                        files.append(file_path)
-                    else:
-                        self.stats["ignored_files"] += 1
-            
-            files.sort()
-            
-            # Stream each file
-            for file_path in files:
-                rel_path = file_path.relative_to(self.project_path)
-                yield f"\n## {rel_path}\n"
-                
-                if self.is_text_file(file_path, max_file_size):
-                    try:
-                        with open(file_path, "r", encoding="utf-8") as f:
-                            content = f.read()
-                        
-                        lang = self.get_language(file_path)
-                        self.stats["included_files"] += 1
-                        self.stats["total_size"] += len(content)
-                        if lang:
-                            self.stats["languages"].add(lang)
-                        
-                        yield f"```{lang}\n"
-                        yield content
-                        yield "```\n"
-                    except Exception as e:
-                        console.print(f"[yellow]Warning:[/] Skipping {rel_path}: {str(e)}")
-                        yield "*[Error reading file]*\n"
+        self,
+        max_file_size: int = 1_000_000,
+    ) -> Iterator[str]:
+        """Stream the concatenated output of all project files.
+
+        Args:
+            max_file_size: Maximum size of individual files to include
+
+        Yields:
+            Chunks of the markdown output as they're generated
+        """
+        self.initialize()
+
+        # Disable rich formatting when streaming
+        console = Console(file=sys.stdout, force_terminal=False)
+
+        # Header
+        yield "# Project Source Code\n\n"
+
+        # Project structure
+        yield "## Project Structure\n"
+        yield self.generate_tree()
+        yield "\n"
+
+        # Process files
+        files = []
+        for file_path in self.project_path.rglob("*"):
+            if file_path.is_file():
+                self.stats["total_files"] += 1
+                if not self.should_ignore(file_path):
+                    files.append(file_path)
                 else:
-                    self.stats["binary_files"] += 1
-                    yield "*[Binary file]*\n"
+                    self.stats["ignored_files"] += 1
+
+        files.sort()
+
+        # Stream each file
+        for file_path in files:
+            rel_path = file_path.relative_to(self.project_path)
+            yield f"\n## {rel_path}\n"
+
+            if self.is_text_file(file_path, max_file_size):
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        content = f.read()
+
+                    lang = self.get_language(file_path)
+                    self.stats["included_files"] += 1
+                    self.stats["total_size"] += len(content)
+                    if lang:
+                        self.stats["languages"].add(lang)
+
+                    yield f"```{lang}\n"
+                    yield content
+                    yield "```\n"
+                except Exception as e:
+                    console.print(f"[yellow]Warning:[/] Skipping {rel_path}: {str(e)}")
+                    yield "*[Error reading file]*\n"
+            else:
+                self.stats["binary_files"] += 1
+                yield "*[Binary file]*\n"
 
 
-@click.group()
-def cli():
+@click.group(invoke_without_command=True)
+@click.pass_context
+def cli(ctx):
     """AIpaste - Format your code for AI tools like ChatGPT and Claude."""
-    pass
+    if ctx.invoked_subcommand is None:
+        # Capture stream output to clipboard
+        output = []
+        try:
+            paster = Aipaste(
+                project_path=".",
+                output_file=None,
+                skip_common=False,
+                skip_files=[],
+            )
+
+            # Collect all chunks
+            for chunk in paster.stream_output():
+                output.append(chunk)
+
+            # Join and copy to clipboard
+            full_output = "".join(output)
+            import pyperclip
+
+            pyperclip.copy(full_output)
+
+            console = Console(stderr=True)
+            console.print("[green]✓[/] Project snapshot copied to clipboard!")
+
+        except Exception as e:
+            console = Console(stderr=True)
+            console.print(f"[red]Error:[/] {str(e)}")
+            raise click.Abort()
+
 
 @cli.command()
 @click.option(
@@ -553,15 +582,16 @@ def stream(project_path, max_file_size, skip_common, skip_files):
             skip_common=skip_common,
             skip_files=skip_files,
         )
-        
+
         for chunk in paster.stream_output(max_file_size=max_file_size):
             sys.stdout.write(chunk)
             sys.stdout.flush()  # Ensure immediate output
-            
+
     except Exception as e:
         console = Console(stderr=True)
         console.print(f"[red]Error:[/] {str(e)}")
         raise click.Abort()
+
 
 @cli.command()
 @click.option(
